@@ -1,17 +1,40 @@
-#!/usr/bin/env python
-
+from datetime import datetime
+from json import loads
 from os import environ
 from time import sleep
-from json import loads
-from datetime import datetime
 from traceback import format_exc
 
 import requests
+from django.http import HttpResponse
 
-
-FB_GROUP_FEED_URL = "https://graph.facebook.com/v2.5/%s/feed/?access_token=%s&since=%s&limit=1000"
+FB_GROUP_FEED_URL = "https://graph.facebook.com/%s/feed/?access_token=%s&limit=2"
 FB_POST_URL = "https://www.facebook.com/groups/maslahat.uz/permalink/%s/"
 TG_SEND_MSG_URL = "https://api.telegram.org/bot%s/sendMessage"
+
+
+def index(request):
+    if "FACEBOOK_API" in environ and \
+                    "BOT_API" in environ and \
+                    "FACEBOOK_ID" in environ and \
+                    "TG_CHANNEL_ID" in environ and \
+                    "LAST_POST_ID" in environ:
+
+        fb_app_access_token = environ["FACEBOOK_API"]
+        tg_bot_access_token = environ["BOT_API"]
+        fb_group_id = environ["FACEBOOK_ID"]
+        tg_channel_id = environ["TG_CHANNEL_ID"]
+        fb_last_post_id = environ["LAST_POST_ID"]
+
+        main(fb_app_access_token,
+             tg_bot_access_token,
+             fb_group_id,
+             tg_channel_id,
+             fb_last_post_id)
+
+        print "SUCCESSFULLY"
+    else:
+        print "[0001]: One of environment variables not given."
+    return HttpResponse("Salom dunyo!")
 
 
 def get_date():
@@ -21,7 +44,6 @@ def get_date():
 def tg_send_msg(tg_bot_access_token,
                 tg_channel_id,
                 fb_post):
-
     url = TG_SEND_MSG_URL % tg_bot_access_token
 
     fb_post_id = fb_post["id"]
@@ -30,7 +52,7 @@ def tg_send_msg(tg_bot_access_token,
     fb_post_url = FB_POST_URL % str(fb_post_id)
     msg = "%s\n\n%s" % (fb_post_msg,
                         fb_post_url)
-    
+    # print "message"; print msg
     requests.post(url=url,
                   data={'chat_id': tg_channel_id,
                         'text': msg})
@@ -41,26 +63,28 @@ def tg_send_msg(tg_bot_access_token,
 def fb_get_new_post_ids_from_feed(fb_app_access_token,
                                   fb_group_id,
                                   fb_last_post_id):
-
     url = FB_GROUP_FEED_URL % (fb_group_id,
-                               fb_app_access_token,
-                               get_date())
-
+                               fb_app_access_token)
     response = requests.get(url)
     json_response = loads(response.content)
-
+    # print json_response
     posts = []
 
     if "data" in json_response and len(json_response["data"]) > 0:
+        # print "true"
         for post in json_response["data"]:
-            post_id = int(post["id"].split("_")[1])
+            # print "post_id: " + post["id"]
 
-            if fb_last_post_id < post_id:
+            post_id = int(post["id"].split("_")[1])
+            print "id: " + str(post_id) + "  _  last_id: " + str(fb_last_post_id)
+
+            if fb_last_post_id > post_id:
                 posts.append({"id": post_id,
                               "data": post})
 
         posts = sorted(posts, key=lambda k: k["id"], reverse=True)
-
+    else:
+        print "false"
     return posts
 
 
@@ -69,7 +93,6 @@ def main(fb_app_access_token,
          fb_group_id,
          tg_channel_id,
          fb_last_post_id):
-
     error_sleep_time = 30
     sleep_time = 10
     delta_time = 5
@@ -85,15 +108,18 @@ def main(fb_app_access_token,
                                                            fb_last_post_id)
             # Fetching FB group post with polling time management
             if len(reversed_posts) == 0:
+                print "reversed_post = 0"
                 sleep_time += delta_time
                 if sleep_time > max_sleep_time:
                     sleep_time = max_sleep_time
             else:
+                print "reversed_post > 0"
                 sleep_time -= delta_time
                 if sleep_time < min_sleep_time:
                     sleep_time = min_sleep_time
 
                 for post in reversed_posts:
+                    print "----"
                     post_id = tg_send_msg(tg_bot_access_token,
                                           tg_channel_id,
                                           post)
@@ -110,28 +136,7 @@ def main(fb_app_access_token,
         finally:
             print "=" * 80
             print tb
-            
+
         sleep(sleep_time)
 
 
-if __name__ == "__main__":
-
-    if "FACEBOOK_APP_ACCESS_TOKEN" in environ and \
-       "TELEGRAM_BOT_ACCESS_TOKEN" in environ and \
-       "FACEBOOK_GROUP_ID" in environ and \
-       "TELEGRAM_CHANNEL_ID" in environ and \
-       "FACEBOOK_LAST_POST_ID" in environ:
-
-        fb_app_access_token = environ["FACEBOOK_APP_ACCESS_TOKEN"]
-        tg_bot_access_token = environ["TELEGRAM_BOT_ACCESS_TOKEN"]
-        fb_group_id = environ["FACEBOOK_GROUP_ID"]
-        tg_channel_id = environ["TELEGRAM_CHANNEL_ID"]
-        fb_last_post_id = environ["FACEBOOK_LAST_POST_ID"]
-
-        main(fb_app_access_token,
-             tg_bot_access_token,
-             fb_group_id,
-             tg_channel_id,
-             fb_last_post_id)
-    else:
-        print "[0001]: One of environment variables not given."
