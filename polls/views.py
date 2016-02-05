@@ -8,7 +8,8 @@ import requests
 from django.http import HttpResponse
 
 FB_GROUP_FEED_URL = "https://graph.facebook.com/%s/feed/?access_token=%s&limit=2"
-FB_POST_URL = "https://www.facebook.com/groups/maslahat.uz/permalink/%s/"
+# FB_POST_URL = "https://www.facebook.com/groups/maslahat.uz/permalink/%s/"
+FB_POST_URL = "https://www.facebook.com/1026639197392218/posts/%s"
 TG_SEND_MSG_URL = "https://api.telegram.org/bot%s/sendMessage"
 
 
@@ -78,7 +79,7 @@ def fb_get_new_post_ids_from_feed(fb_app_access_token,
             post_id = int(post["id"].split("_")[1])
             print "id: " + str(post_id) + "  _  last_id: " + str(fb_last_post_id)
 
-            if fb_last_post_id > post_id:
+            if fb_last_post_id < post_id:
                 posts.append({"id": post_id,
                               "data": post})
 
